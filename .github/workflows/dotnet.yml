@@ -1,0 +1,56 @@
+name: .NET CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: biblioteca_digital_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v3
+
+    - name: Instalar .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Restaurar dependencias
+      run: dotnet restore
+
+    - name: Compilar
+      run: dotnet build --no-restore
+
+    - name: Esperar a que MySQL esté listo
+      run: |
+        for i in {1..30}; do
+          if mysqladmin ping -h 127.0.0.1 -uroot -proot --silent; then
+            echo "✅ MySQL está listo"
+            break
+          fi
+          echo "⏳ Esperando MySQL..."
+          sleep 2
+        done
+
+    - name: Ejecutar pruebas
+      run: dotnet test --no-build --verbosity normal
+      env:
+        ConnectionStrings__Default: "server=127.0.0.1;port=3306;database=biblioteca_digital_test;user=root;password=root;"
